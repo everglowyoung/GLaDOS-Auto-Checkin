@@ -15,19 +15,13 @@ logger = logging.getLogger(__name__)
 def send_pushdeer(token, title, msg):
     """
     使用 PushDeer 官方推荐的 API 方式发送通知
-    不再依赖 pypushdeer 库，避免 KeyError: 'content'
     """
     if not token:
         logger.warning("SENDKEY (PushDeer Key) 未设置，跳过通知发送")
         return None
     
-    # PushDeer 官方 API 地址
     url = "https://api2.pushdeer.com/message/push"
     
-    # 构造请求参数
-    # text: 消息标题
-    # desp: 消息详情（支持多行和 Markdown）
-    # type: 指定为 markdown 格式
     payload = {
         "pushkey": token,
         "text": title,
@@ -37,7 +31,6 @@ def send_pushdeer(token, title, msg):
     
     try:
         logger.info("正在通过 PushDeer 官方 API 发送通知...")
-        # 官方推荐方式，使用 POST 提交
         response = requests.post(url, data=payload, timeout=20)
         result = response.json()
         
@@ -52,12 +45,11 @@ def send_pushdeer(token, title, msg):
         return None
 
 def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, payload):
-    """执行单个账号的签到操作（保留高精度解析逻辑）"""
+    """执行单个账号的签到操作"""
     try:
         headers = headers_template.copy()
         headers['cookie'] = cookie
         
-        # 执行签到
         logger.info("开始执行签到...")
         checkin = requests.post(
             check_in_url, 
@@ -66,7 +58,6 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             timeout=30
         )
         
-        # 获取账号状态
         logger.info("获取账号状态...")
         state = requests.get(
             status_url, 
@@ -85,7 +76,6 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             'points_change': 0
         }
         
-        # 处理签到结果
         if checkin.status_code == 200:
             result['checkin_success'] = True
             try:
@@ -111,7 +101,6 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             except Exception as e:
                 logger.error(f"解析失败: {e}")
         
-        # 获取状态（剩余天数）
         if state.status_code == 200:
             result['status_success'] = True
             try:
@@ -124,7 +113,6 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             except:
                 result['email'] = 'parse_error'
         
-        # 判定最终返回状态
         if result['checkin_success']:
             msg = result['check_result']
             if "Checkin!  Got" in msg:
@@ -141,16 +129,15 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
         logger.error(f"异常: {e}")
         return {'checkin_success': False, 'message_status': str(e)}, 'fail'
 
-def get_beijing_time():
-    """获取北京时间（UTC+8）"""
-    utc_now = datetime.datetime.utcnow()
-    beijing_time = utc_now + datetime.timedelta(hours=8)
-    return beijing_time.strftime("%Y/%m/%d %H:%M:%S")
+def get_utc_time():
+    """获取标准 UTC 时间"""
+    # 获取当前 UTC 时间
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    return utc_now.strftime("%Y/%m/%d %H:%M:%S")
 
 if __name__ == '__main__':
-    logger.info("开始执行 GLaDOS 签到脚本 (修复版)")
+    logger.info("开始执行 GLaDOS 签到脚本 (UTC时间版)")
     
-    # 获取环境变量
     sckey = os.environ.get("SENDKEY", "")
     cookies_env = os.environ.get("COOKIES", "")
     
@@ -198,8 +185,9 @@ if __name__ == '__main__':
             if i < len(cookies) - 1:
                 time.sleep(2)
 
-        # 构造通知内容
-        time_str = get_beijing_time()
+        # 获取 UTC 时间
+        time_str = get_utc_time()
+        
         for i, res in enumerate(account_results):
             account_context = f"--- 账号 {i+1} 签到结果 ---\n"
             if res.get('checkin_success'):
@@ -214,18 +202,17 @@ if __name__ == '__main__':
             if res.get('status_success'):
                 account_context += f"剩余天数: {res.get('leftdays')}天\n"
             
-            account_context += f"签到时间: {time_str}\n"
+            # 标注为 UTC 时间
+            account_context += f"签到时间: {time_str} (UTC)\n"
             if i < len(account_results) - 1:
                 account_context += "\n"
             context += account_context
 
-        # 构造标题
         if len(cookies) > 1:
             title = f"GLaDOS签到: 成功{success}, 失败{fail}, 重复{repeats}"
         else:
             title = account_results[0]['message_status'] if account_results else "签到结束"
 
-        # 使用官方推荐方式发送推送
         send_pushdeer(sckey, title, context)
         
     else:
