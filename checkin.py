@@ -4,6 +4,7 @@ import os
 import time
 import logging
 import datetime
+from pypushdeer import PushDeer
 
 # 配置日志
 logging.basicConfig(
@@ -13,43 +14,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def send_pushdeer(token, title, msg):
-    """
-    使用 PushDeer 官方推荐的 API 方式发送通知
-    """
+    """使用 PushDeer 发送通知（按照版本 2 逻辑实现）"""
     if not token:
         logger.warning("SENDKEY (PushDeer Key) 未设置，跳过通知发送")
         return None
     
-    url = "https://api2.pushdeer.com/message/push"
-    
-    payload = {
-        "pushkey": token,
-        "text": title,
-        "desp": msg,
-        "type": "markdown"
-    }
-    
     try:
-        logger.info("正在通过 PushDeer 官方 API 发送通知...")
-        response = requests.post(url, data=payload, timeout=20)
-        result = response.json()
-        
-        if result.get("code") == 0:
-            logger.info("PushDeer 通知发送成功")
-            return True
-        else:
-            logger.error(f"PushDeer 发送失败，服务器返回：{result}")
-            return False
+        logger.info("正在通过 PushDeer 发送通知...")
+        push_deer = PushDeer(pushkey=token)
+        # PushDeer 默认发送 text 格式，desp 支持 markdown/多行文本
+        result = push_deer.send_text(title, desp=msg)
+        logger.info("PushDeer 通知发送尝试完成")
+        return result
     except Exception as e:
-        logger.error(f"PushDeer API 调用异常: {e}")
+        logger.error(f"PushDeer 发送失败: {e}")
         return None
 
 def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, payload):
-    """执行单个账号的签到操作"""
+    """执行单个账号的签到操作（完全保留版本 1 的深度解析逻辑）"""
     try:
         headers = headers_template.copy()
         headers['cookie'] = cookie
         
+        # 执行签到
         logger.info("开始执行签到...")
         checkin = requests.post(
             check_in_url, 
@@ -58,6 +45,7 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             timeout=30
         )
         
+        # 获取账号状态
         logger.info("获取账号状态...")
         state = requests.get(
             status_url, 
@@ -76,6 +64,7 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             'points_change': 0
         }
         
+        # 处理签到结果
         if checkin.status_code == 200:
             result['checkin_success'] = True
             try:
@@ -98,9 +87,11 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
                             result['points_change'] = 1
                     else:
                         result['points_change'] = 0
+                logger.info(f"签到响应: {result['check_result']}")
             except Exception as e:
                 logger.error(f"解析失败: {e}")
         
+        # 处理状态查询（获取天数）
         if state.status_code == 200:
             result['status_success'] = True
             try:
@@ -113,6 +104,7 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             except:
                 result['email'] = 'parse_error'
         
+        # 判定状态
         if result['checkin_success']:
             msg = result['check_result']
             if "Checkin!  Got" in msg:
@@ -129,15 +121,16 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
         logger.error(f"异常: {e}")
         return {'checkin_success': False, 'message_status': str(e)}, 'fail'
 
-def get_utc_time():
-    """获取标准 UTC 时间"""
-    # 获取当前 UTC 时间
-    utc_now = datetime.datetime.now(datetime.timezone.utc)
-    return utc_now.strftime("%Y/%m/%d %H:%M:%S")
+def get_beijing_time():
+    """获取北京时间（UTC+8）"""
+    utc_now = datetime.datetime.utcnow()
+    beijing_time = utc_now + datetime.timedelta(hours=8)
+    return beijing_time.strftime("%Y/%m/%d %H:%M:%S")
 
 if __name__ == '__main__':
-    logger.info("开始执行 GLaDOS 签到脚本 (UTC时间版)")
+    logger.info("开始执行 GLaDOS 签到脚本 (PushDeer 增强版)")
     
+    # 获取环境变量
     sckey = os.environ.get("SENDKEY", "")
     cookies_env = os.environ.get("COOKIES", "")
     
@@ -153,6 +146,7 @@ if __name__ == '__main__':
         context = ""
         account_results = []
 
+        # 接口配置
         api_endpoints = [{
             'checkin': 'https://glados.cloud/api/user/checkin',
             'status': 'https://glados.cloud/api/user/status',
@@ -165,6 +159,7 @@ if __name__ == '__main__':
         for i, cookie in enumerate(cookies):
             logger.info(f"正在处理第 {i+1} 个账号...")
             
+            # 执行签到逻辑
             headers_template = {
                 'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json;charset=UTF-8',
@@ -176,18 +171,19 @@ if __name__ == '__main__':
                 cookie, api_endpoints[0]['checkin'], api_endpoints[0]['status'], headers_template, payload
             )
             
+            # 统计
             if status == 'success': success += 1
             elif status == 'repeat': repeats += 1
             else: fail += 1
             
             account_results.append(result)
             
+            # 账号间随机延迟，模拟真人行为（结合了版本 2 的优点）
             if i < len(cookies) - 1:
                 time.sleep(2)
 
-        # 获取 UTC 时间
-        time_str = get_utc_time()
-        
+        # 构造详细通知内容（保留版本 1 的美化格式）
+        time_str = get_beijing_time()
         for i, res in enumerate(account_results):
             account_context = f"--- 账号 {i+1} 签到结果 ---\n"
             if res.get('checkin_success'):
@@ -195,27 +191,32 @@ if __name__ == '__main__':
                     account_context += f"积分变化: +{res['points_change']}\n"
                 elif "Repeat" in res.get('check_result', ''):
                     account_context += "积分变化: +0 (重复签到)\n"
+                
                 account_context += f"当前余额: {res.get('points', 0)}\n"
             else:
                 account_context += f"签到结果: {res.get('message_status')}\n"
                 
             if res.get('status_success'):
                 account_context += f"剩余天数: {res.get('leftdays')}天\n"
+            else:
+                account_context += "剩余天数: 获取失败\n"
             
-            # 标注为 UTC 时间
-            account_context += f"签到时间: {time_str} (UTC)\n"
+            account_context += f"签到时间: {time_str}\n"
             if i < len(account_results) - 1:
                 account_context += "\n"
             context += account_context
 
+        # 构造标题
         if len(cookies) > 1:
             title = f"GLaDOS签到: 成功{success}, 失败{fail}, 重复{repeats}"
         else:
             title = account_results[0]['message_status'] if account_results else "签到结束"
 
+        # 发送 PushDeer 通知
         send_pushdeer(sckey, title, context)
         
     else:
-        logger.error("未检测到有效的 COOKIES")
+        logger.error("未找到有效的 COOKIES 环境变量")
+        send_pushdeer(sckey, "GLaDOS 签到失败", "未找到 COOKIES，请检查配置")
 
     logger.info("脚本执行完成")
