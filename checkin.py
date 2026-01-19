@@ -20,8 +20,7 @@ HEADERS_BASE = {
     "accept": "application/json, text/plain, */*",
 }
 
-# 现在的 token 建议依然使用 glados.one
-PAYLOAD = {"token": "glados.one"}
+PAYLOAD = {}
 TIMEOUT = 30
 # ==========================================
 
