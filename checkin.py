@@ -7,7 +7,7 @@ from pypushdeer import PushDeer
 
 # ================= 配置区 =================
 # 建议使用 glados.network 或 glados.cloud，目前这两个接口较为稳定
-BASE_URL = "https://glados.cloud" 
+BASE_URL = "https://glados.network" 
 CHECKIN_URL = f"{BASE_URL}/api/user/checkin"
 STATUS_URL = f"{BASE_URL}/api/user/status"
 
