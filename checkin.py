@@ -79,7 +79,7 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
                         result['points_change'] = int(float(checkin_list[0].get('change', 0)))
                     result['points'] = int(float(checkin_list[0].get('balance', 0)))
                 else: 
-                    if "Checkin!  Got" in result['check_result']:
+                    if "Checkin! Got" in result['check_result']:
                         try:
                             points_str = result['check_result'].split("Got ")[1].split(" points")[0]
                             result['points_change'] = int(points_str)
@@ -107,7 +107,7 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
         # 判定状态
         if result['checkin_success']:
             msg = result['check_result']
-            if "Checkin!  Got" in msg:
+            if "Checkin! Got" in msg:
                 result['message_status'] = f"签到成功，点数 +{result['points_change']}"
                 return result, 'success'
             elif "Checkin Repeats!" in msg:
