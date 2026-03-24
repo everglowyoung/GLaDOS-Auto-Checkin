@@ -110,7 +110,7 @@ def perform_glados_checkin(cookie, check_in_url, status_url, headers_template, p
             if "Checkin! Got" in msg:
                 result['message_status'] = f"签到成功，点数 +{result['points_change']}"
                 return result, 'success'
-            elif "Checkin Repeats!" in msg:
+            elif "logged" in msg:
                 result['message_status'] = "重复签到，明天再来"
                 return result, 'repeat'
         
@@ -189,7 +189,7 @@ if __name__ == '__main__':
             if res.get('checkin_success'):
                 if res['points_change'] > 0:
                     account_context += f"积分变化: +{res['points_change']}\n"
-                elif "Repeat" in res.get('check_result', ''):
+                elif "logged" in res.get('check_result', ''):
                     account_context += "积分变化: +0 (重复签到)\n"
                 
                 account_context += f"当前余额: {res.get('points', 0)}\n"
